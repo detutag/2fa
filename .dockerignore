@@ -1,0 +1,42 @@
+# Dependencies
+node_modules
+
+# Data
+data
+*.db
+*.db-wal
+*.db-shm
+
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
+
+# Cloudflare specific
+wrangler.toml
+worker.js
+.wrangler
+
+# Documentation
+*.md
+LICENSE
+
+# CI/CD
+.github
+
+# Claude
+.claude
+
+# Misc
+.DS_Store
+.env
+.env.local

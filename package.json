@@ -1,0 +1,23 @@
+{
+  "name": "2fa-authenticator",
+  "version": "2.0.0",
+  "description": "2FA Authenticator with end-to-end encryption",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "keywords": [
+    "2fa",
+    "totp",
+    "authenticator"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "better-sqlite3": "^11.0.0",
+    "express": "^4.21.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

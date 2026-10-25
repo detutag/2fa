@@ -1,0 +1,26 @@
+name = "2fa-sync"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+
+# 靜態資源由 Worker 先行處理（run_worker_first），以便：
+# - 為所有回應附加安全標頭（CSP / X-Frame-Options 等）
+# - API 請求不落入靜態資源路由
+# not_found_handling = single-page-application：未知路徑回退 index.html
+assets = { directory = "./public", binding = "ASSETS", run_worker_first = true, html_handling = "auto-trailing-slash", not_found_handling = "single-page-application" }
+
+# NOTE:
+# - Wrangler 支援自動建立資源。
+# - 若省略/註解 id，首次 wrangler deploy 時會自動建立並連結 KV。
+# - 手動設定時，將 __DATA_KV_ID__ 替換為自己的 KV namespace id。
+[[kv_namespaces]]
+binding = "DATA_KV"
+# id = "__DATA_KV_ID__"
+# preview_id = "__DATA_KV_PREVIEW_ID__"
+
+# 可選：API 速率限制（每個 IP 每 60 秒最多 100 次請求，防暴力/濫用）。
+# worker.js 已自動偵測：有此 binding 即啟用，沒有也正常運作。
+# 若你的部署環境不支援 ratelimit binding，註解掉本段即可。
+[[unsafe.bindings]]
+name = "API_RATE_LIMITER"
+type = "ratelimit"
+simple = { limit = 100, period = 60 }

@@ -1,0 +1,12 @@
+services:
+  2fa:
+    build: .
+    container_name: 2fa-authenticator
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - PORT=3000
+      - DB_PATH=/app/data/2fa.db
+    restart: unless-stopped

@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3B82F6"/>
+      <stop offset="1" stop-color="#1D4ED8"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <!-- 盾牌 -->
+  <path d="M256 92l132 49v101c0 91-56 156-132 183-76-27-132-92-132-183V141z"
+        fill="rgba(255,255,255,0.18)" stroke="#FFFFFF" stroke-width="22" stroke-linejoin="round"/>
+  <!-- 鎖孔 -->
+  <circle cx="256" cy="234" r="34" fill="#FFFFFF"/>
+  <rect x="240" y="256" width="32" height="70" rx="16" fill="#FFFFFF"/>
+  <!-- 倒數弧線（TOTP 進度環意象） -->
+  <path d="M398 176a150 150 0 0 0-52-58" fill="none" stroke="#FBBF24" stroke-width="18" stroke-linecap="round"/>
+</svg>
