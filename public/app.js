@@ -2567,34 +2567,125 @@ function downloadBlob(content, filename, mime) {
     setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
 }
 
+/* ---- 各匯出格式建構器（純函式，可供測試） ---- */
+function buildOwnExportData(list) {
+    return {
+        app: '2fa-authenticator',
+        version: 2,
+        exported_at: new Date().toISOString(),
+        keys: list.map(function (k) {
+            var o = { name: k.name, secret: k.secret };
+            if (k.type === 'hotp') { o.type = 'hotp'; o.counter = k.counter || 0; }
+            if (k.digits) o.digits = k.digits;
+            if (k.period) o.period = k.period;
+            if (k.algorithm) o.algorithm = k.algorithm;
+            if (k.account) o.account = k.account;
+            if (k.issuer) o.issuer = k.issuer;
+            return o;
+        })
+    };
+}
+
+function buildUriExportText(list) {
+    return list.map(buildOtpauthUri).join('\n') + '\n';
+}
+
+/** Aegis Authenticator 原生（未加密）備份格式 */
+function buildAegisExportData(list) {
+    return {
+        version: 1,
+        header: { slots: null, params: null },
+        db: {
+            version: 1,
+            entries: list.map(function (k) {
+                var opts = keyOpts(k);
+                var info = {
+                    secret: k.secret,
+                    algo: opts.algorithm.toLowerCase(),
+                    digits: opts.digits
+                };
+                if (k.type === 'hotp') info.counter = k.counter || 0;
+                else info.period = opts.period;
+                return {
+                    type: k.type === 'hotp' ? 'hotp' : 'totp',
+                    uuid: generateId(),
+                    name: k.account || k.name,
+                    issuer: k.issuer || '',
+                    note: '',
+                    icon: null,
+                    icon_mime: null,
+                    info: info
+                };
+            })
+        }
+    };
+}
+
+/** 2FAS Authenticator 原生備份格式 */
+function build2FASExportData(list) {
+    var now = Date.now();
+    var services = list.map(function (k, i) {
+        var opts = keyOpts(k);
+        var issuer = k.issuer || '';
+        var account = k.account || '';
+        var otp = {
+            account: account || k.name,
+            issuer: issuer,
+            label: issuer ? (issuer + ':' + (account || k.name)) : k.name,
+            digits: opts.digits,
+            period: opts.period,
+            algorithm: opts.algorithm,
+            secret: k.secret,
+            tokenType: k.type === 'hotp' ? 'HOTP' : 'TOTP',
+            source: 'Manual'
+        };
+        if (k.type === 'hotp') otp.counter = k.counter || 0;
+        return {
+            key: generateId(),
+            name: issuer || k.name,
+            secret: k.secret,
+            order: i,
+            otp: otp,
+            serviceTypeID: null,
+            updatedAt: now,
+            createdAt: now
+        };
+    });
+    return {
+        app: '2fas',
+        appVersion: '5.0.0',
+        backupVersion: 3,
+        createdAt: now,
+        updatedAt: now,
+        groups: [],
+        services: services,
+        servicesOrder: services.map(function (s) { return s.key; })
+    };
+}
+
 function exportKeys() {
     if (keys.length === 0) {
         showToast('沒有可匯出的金鑰', 'error');
         return;
     }
-    var format = $('export-format-uri') && $('export-format-uri').checked ? 'uri' : 'json';
     var dateStr = new Date().toISOString().slice(0, 10);
+    var format = 'json';
+    ['uri', 'aegis', '2fas'].forEach(function (f) {
+        var el = $('export-format-' + f);
+        if (el && el.checked) format = f;
+    });
+
     if (format === 'uri') {
-        var lines = keys.map(buildOtpauthUri).join('\n') + '\n';
-        downloadBlob(lines, '2fa-otpauth-' + dateStr + '.txt', 'text/plain;charset=utf-8');
+        downloadBlob(buildUriExportText(keys), '2fa-otpauth-' + dateStr + '.txt', 'text/plain;charset=utf-8');
         showToast('已匯出 otpauth URI 清單', 'success');
+    } else if (format === 'aegis') {
+        downloadBlob(JSON.stringify(buildAegisExportData(keys), null, 2), '2fa-aegis-' + dateStr + '.json', 'application/json');
+        showToast('已匯出 Aegis 相容備份', 'success');
+    } else if (format === '2fas') {
+        downloadBlob(JSON.stringify(build2FASExportData(keys), null, 2), '2fa-2fas-' + dateStr + '.json', 'application/json');
+        showToast('已匯出 2FAS 相容備份', 'success');
     } else {
-        var exportData = {
-            app: '2fa-authenticator',
-            version: 2,
-            exported_at: new Date().toISOString(),
-            keys: keys.map(function (k) {
-                var o = { name: k.name, secret: k.secret };
-                if (k.type === 'hotp') { o.type = 'hotp'; o.counter = k.counter || 0; }
-                if (k.digits) o.digits = k.digits;
-                if (k.period) o.period = k.period;
-                if (k.algorithm) o.algorithm = k.algorithm;
-                if (k.account) o.account = k.account;
-                if (k.issuer) o.issuer = k.issuer;
-                return o;
-            })
-        };
-        downloadBlob(JSON.stringify(exportData, null, 2), '2fa-backup-' + dateStr + '.json', 'application/json');
+        downloadBlob(JSON.stringify(buildOwnExportData(keys), null, 2), '2fa-backup-' + dateStr + '.json', 'application/json');
         showToast('已匯出 JSON 備份', 'success');
     }
     hideExportModal();
@@ -3090,6 +3181,10 @@ if (typeof module !== 'undefined' && module.exports) {
         buildOtpauthUri: buildOtpauthUri,
         decodeMigrationPayload: decodeMigrationPayload,
         parseImportContent: parseImportContent,
+        buildOwnExportData: buildOwnExportData,
+        buildUriExportText: buildUriExportText,
+        buildAegisExportData: buildAegisExportData,
+        build2FASExportData: build2FASExportData,
         markImportDuplicates: markImportDuplicates,
         passwordStrength: passwordStrength,
         validatePassword: validatePassword,

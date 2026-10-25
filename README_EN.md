@@ -214,16 +214,35 @@ Click the "+" button in the top right, three methods available:
 
 Click the logout button in the top left to clear current session and return to login page.
 
-### Import/Export
+### Import / Export
 
-**Export Backup**:
-1. After login, click the "Export" button at the bottom of the page
-2. Download the JSON format backup file (stored in plaintext, keep it safe)
+**Import** (click "Import", pick a .json or .txt backup):
 
-**Import Backup**:
-1. Click the "Import" button at the bottom of the page
-2. Select a previously exported JSON file
-3. Duplicate keys (same name) will be skipped, existing data preserved, only new keys imported
+| Source app | Format |
+|------------|--------|
+| This app | Native JSON v1/v2 |
+| Aegis Authenticator | Plain (unencrypted) JSON backup |
+| 2FAS Authenticator | Plain (unencrypted) JSON backup |
+| Ente Auth | JSON backup |
+| Bitwarden | JSON export (with TOTP fields) |
+| FreeOTP / FreeOTP+ | JSON backup |
+| Raivo OTP | JSON backup |
+| OTP Auth (iOS) | JSON backup |
+| Google Authenticator | Migration data (`otpauth-migration://`, incl. QR scan) |
+| Generic | `otpauth://` URI list (one per line) |
+
+A preview checklist appears before importing: select entries, duplicates and invalid items are flagged automatically. Encrypted backups (Aegis/2FAS encrypted exports) are detected with a clear hint to export plaintext instead.
+
+**Export** (click "Export", choose a format):
+
+| Format | Compatible with |
+|--------|-----------------|
+| Native JSON backup (v2) | Round-trip into this app with all parameters (digits, period, algorithm, HOTP counter) |
+| otpauth URI list (.txt) | De-facto universal standard: Aegis / Ente "Plain text" import, any URI-capable tool, or per-line QR conversion |
+| Aegis-compatible JSON | Aegis "Import → Aegis" accepts the file directly (plaintext format) |
+| 2FAS-compatible JSON | 2FAS "Import from other apps → 2FAS" accepts the file directly |
+
+> ⚠ All exports are plaintext — store them safely and delete after use.
 
 ## Important Notes
 

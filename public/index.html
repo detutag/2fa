@@ -2328,7 +2328,21 @@
                     <input type="radio" name="export-format" id="export-format-uri">
                     <div>
                         <strong>otpauth URI 清單（.txt）</strong>
-                        <span>通用格式，可匯入 Aegis、2FAS、Ente 等多數驗證器</span>
+                        <span>通用標準格式：Aegis／Ente 的 Plain text 匯入、以及多數支援 URI 的工具可直接讀取</span>
+                    </div>
+                </label>
+                <label class="format-option" for="export-format-aegis">
+                    <input type="radio" name="export-format" id="export-format-aegis">
+                    <div>
+                        <strong>Aegis 相容 JSON（.json）</strong>
+                        <span>Aegis Authenticator「匯入 → Aegis」可直接原檔匯入（未加密格式）</span>
+                    </div>
+                </label>
+                <label class="format-option" for="export-format-2fas">
+                    <input type="radio" name="export-format" id="export-format-2fas">
+                    <div>
+                        <strong>2FAS 相容 JSON（.json）</strong>
+                        <span>2FAS Authenticator「從其他應用匯入 → 2FAS」可直接原檔匯入</span>
                     </div>
                 </label>
                 <p class="export-warn">⚠ 匯出檔案為明文（未加密），請妥善保管，使用後建議刪除</p>
