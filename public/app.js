@@ -897,6 +897,90 @@ function sweepOtpauthUris(text, res) {
  * 解析匯入內容。回傳 {format, entries, encrypted, error}
  * error 可能值：'empty' | 'too-large' | 'encrypted' | 'unsupported' | 'parse'
  */
+/**
+ * 產生 JSON 的「已遮罩結構摘要」，供無法辨識時回報用：
+ * 保留欄位名稱與層級，長字串、疑似金鑰、含 @ 或 :// 的值一律遮罩，陣列只展開前 2 項。
+ */
+function describeJsonShape(node, depth) {
+    depth = depth || 0;
+    if (node === null) return null;
+    if (typeof node === 'string') {
+        if (node.length > 12 || /^[A-Z2-7=\s-]{8,}$/i.test(node) || node.indexOf('@') !== -1 || node.indexOf('://') !== -1) {
+            return '<str:' + node.length + '>';
+        }
+        return node;
+    }
+    if (typeof node === 'number' || typeof node === 'boolean') return node;
+    if (depth >= 6) return '<…>';
+    if (Array.isArray(node)) {
+        var arr = [];
+        for (var i = 0; i < node.length && i < 2; i++) arr.push(describeJsonShape(node[i], depth + 1));
+        if (node.length > 2) arr.push('<共 ' + node.length + ' 項>');
+        return arr;
+    }
+    if (typeof node === 'object') {
+        var out = {};
+        var keys = Object.keys(node);
+        for (var k = 0; k < keys.length && k < 20; k++) out[keys[k]] = describeJsonShape(node[keys[k]], depth + 1);
+        if (keys.length > 20) out['<…>'] = '還有 ' + (keys.length - 20) + ' 個欄位';
+        return out;
+    }
+    return String(typeof node);
+}
+
+function describeJsonShapeText(data) {
+    var t;
+    try { t = JSON.stringify(describeJsonShape(data)); } catch (e) { return ''; }
+    return t.length > 700 ? t.slice(0, 700) + '…' : t;
+}
+
+function parseDeepGeneric(data, res) {
+    deepCollectOtp(data, null, res, { count: 0 }, 0);
+    if (res.entries.length > 0) { res.format = 'generic'; return true; }
+    return false;
+}
+
+/** 純文字 URI 清單解析（每行一個 otpauth:// 或 otpauth-migration://） */
+function parseUriListText(text, res) {
+    var lines = String(text).split(/\r?\n/);
+    var found = 0;
+    for (var i = 0; i < lines.length; i++) {
+        var line = lines[i].trim();
+        if (!line) continue;
+        if (line.indexOf('otpauth-migration://') === 0) {
+            var mig = decodeMigrationPayload(line);
+            for (var m = 0; m < mig.length; m++) pushImportEntry(res, mig[m]);
+            res.format = 'google';
+            found += mig.length;
+        } else if (line.indexOf('otpauth://') === 0) {
+            var pu = parseOtpauthUri(line);
+            if (pu) { pushImportEntry(res, pu); res.format = res.format || 'uris'; found++; }
+        }
+    }
+    return found > 0;
+}
+
+/** 最終兜底：從任意文字中正則掃出所有 otpauth URI */
+function sweepOtpauthUris(text, res) {
+    var re = /otpauth:\/\/(?:totp|hotp)\/[^\s"',<>)\]]+/gi;
+    var matches = String(text).match(re);
+    if (!matches || !matches.length) return false;
+    var seen = new Set();
+    for (var i = 0; i < matches.length; i++) {
+        var uri = matches[i];
+        if (seen.has(uri)) continue;
+        seen.add(uri);
+        var pu = parseOtpauthUri(uri);
+        if (pu) { pushImportEntry(res, pu); }
+    }
+    res.format = res.format || 'uris';
+    return res.entries.length > 0;
+}
+
+/**
+ * 解析匯入內容。回傳 {format, entries, encrypted, error}
+ * error 可能值：'empty' | 'too-large' | 'encrypted' | 'unsupported' | 'parse'
+ */
 function parseImportContent(text) {
     var res = newImportResult();
     var unsupportedHint = '';
@@ -919,10 +1003,7 @@ function parseImportContent(text) {
                 return res;
             }
             if (data && typeof data === 'object') {
-                var topKeys = Array.isArray(data)
-                    ? (data[0] && typeof data[0] === 'object' ? Object.keys(data[0]) : [])
-                    : Object.keys(data);
-                unsupportedHint = topKeys.slice(0, 12).join(', ');
+                unsupportedHint = describeJsonShapeText(data);
             }
         } catch (e) {
             // JSON 解析失敗 → 往下走 URI 解析
@@ -1997,7 +2078,7 @@ async function renderKeys() {
 
         html +=
             '<div class="token-item" data-key-id="' + escapeHtml(String(k.id)) + '" data-type="' + (isHOTP ? 'hotp' : 'totp') + '"' +
-            ' style="--token-delay:' + Math.min(i * 30, 300) + 'ms"' +
+            ' style="--avatar-hue:' + hue + ';--token-delay:' + Math.min(i * 30, 300) + 'ms"' +
             (canDrag ? ' draggable="false"' : '') + '>' +
             '<div class="token-main">' +
             '<div class="token-avatar" style="--avatar-hue:' + hue + '">' + escapeHtml(avatarLetter(k.name)) + '</div>' +
@@ -2625,7 +2706,7 @@ function importKeys() {
         }
         if (result.error === 'unsupported' || result.error === 'parse') {
             showImportError('無法辨識的備份格式。支援：Aegis、2FAS、Ente、Bitwarden、FreeOTP、Raivo、OTP Auth、Google Authenticator 遷移資料、otpauth:// URI 清單、本應用 JSON 備份，以及任何含 secret 欄位的通用 JSON。' +
-                (result.hint ? '（偵測到的欄位：' + result.hint + '）' : ''));
+                (result.hint ? ' 檔案結構（已遮罩金鑰，可複製給開發者排查）：' + result.hint : ''));
             return;
         }
         if (result.error === 'no-keys' || result.entries.length === 0) {
@@ -3377,6 +3458,7 @@ if (typeof module !== 'undefined' && module.exports) {
         buildUriExportText: buildUriExportText,
         buildAegisExportData: buildAegisExportData,
         build2FASExportData: build2FASExportData,
+        describeJsonShapeText: describeJsonShapeText,
         markImportDuplicates: markImportDuplicates,
         passwordStrength: passwordStrength,
         validatePassword: validatePassword,

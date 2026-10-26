@@ -6,8 +6,8 @@
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-gERs5DaPoPALkgMmhL7Euk0rL2kXQCOlmad6Zl1WSLM='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; media-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
     <meta name="description" content="端對端加密的兩步驟驗證碼管理工具，支援離線使用與跨裝置同步">
     <meta name="color-scheme" content="light dark">
-    <meta name="theme-color" content="#F8FAFC" media="(prefers-color-scheme: light)">
-    <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+    <meta name="theme-color" content="#EEF0F8" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#0A0F20" media="(prefers-color-scheme: dark)">
     <title>2FA 驗證器</title>
     <!-- PWA Manifest -->
     <link rel="manifest" href="/manifest.json">
@@ -2015,6 +2015,248 @@
             .input-tabs button {
                 min-height: 42px;
             }
+        }
+
+        /* ==================================================================
+         * 視覺主題層（Ultramarine Vault）
+         * 以下規則刻意放在樣式表最後，僅覆寫外觀，不改動任何 id / class / 結構。
+         * ================================================================== */
+        :root {
+            --bg-primary: #EEF0F8;
+            --bg-secondary: #E4E8F6;
+            --bg-tertiary: #FFFFFF;
+            --glass-bg: rgba(255, 255, 255, 0.84);
+            --glass-border: rgba(255, 255, 255, 0.95);
+            --glass-shadow: 0 1px 2px rgba(17, 22, 43, 0.05), 0 14px 34px -10px rgba(48, 60, 130, 0.18);
+            --shine: rgba(255, 255, 255, 0.8);
+            --overlay-bg: rgba(17, 22, 55, 0.42);
+            --text-primary: #11162B;
+            --text-secondary: #4A5272;
+            --text-tertiary: #7C84A3;
+            --border-default: rgba(40, 52, 110, 0.10);
+            --border-hover: rgba(40, 52, 110, 0.22);
+            --primary: #3B4FD9;
+            --primary-hover: #2E3FB8;
+            --primary-light: #E3E7FD;
+            --primary-glow: rgba(59, 79, 217, 0.30);
+            --ring-bg: rgba(40, 52, 110, 0.10);
+            --radius-sm: 10px;
+            --radius-md: 14px;
+            --radius-lg: 20px;
+            --radius-xl: 26px;
+        }
+
+        :root[data-theme="dark"] {
+            --bg-primary: #0A0F20;
+            --bg-secondary: #0F1630;
+            --bg-tertiary: #151D3B;
+            --glass-bg: rgba(22, 30, 62, 0.74);
+            --glass-border: rgba(165, 180, 255, 0.12);
+            --glass-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 18px 40px -12px rgba(0, 0, 0, 0.6);
+            --shine: rgba(190, 200, 255, 0.16);
+            --overlay-bg: rgba(4, 7, 20, 0.66);
+            --text-primary: #EEF1FF;
+            --text-secondary: #A6AECE;
+            --text-tertiary: #6F78A0;
+            --border-default: rgba(190, 200, 255, 0.10);
+            --border-hover: rgba(190, 200, 255, 0.22);
+            --primary: #6577FF;
+            --primary-hover: #8392FF;
+            --primary-light: rgba(101, 119, 255, 0.18);
+            --primary-glow: rgba(101, 119, 255, 0.38);
+            --ring-bg: rgba(190, 200, 255, 0.10);
+        }
+
+        body {
+            background-color: var(--bg-primary);
+            background-image:
+                radial-gradient(55% 38% at 6% -4%, rgba(99, 120, 255, 0.24), transparent 62%),
+                radial-gradient(45% 36% at 100% 6%, rgba(45, 196, 182, 0.15), transparent 60%);
+        }
+        :root[data-theme="dark"] body {
+            background-image:
+                radial-gradient(55% 38% at 6% -4%, rgba(101, 119, 255, 0.20), transparent 62%),
+                radial-gradient(45% 36% at 100% 6%, rgba(45, 196, 182, 0.09), transparent 60%);
+        }
+
+        ::selection { background: var(--primary-light); color: var(--text-primary); }
+        :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+        /* ---- 解鎖畫面 ---- */
+        .unlock-brand { margin: 40px 0 28px; }
+        .unlock-brand h1 { font-size: 28px; font-weight: 700; letter-spacing: -0.03em; }
+        .unlock-logo {
+            width: 76px;
+            height: 76px;
+            border-radius: 22px;
+            box-shadow:
+                0 0 0 7px color-mix(in srgb, var(--primary) 11%, transparent),
+                0 18px 38px -8px var(--primary-glow);
+        }
+        .unlock-logo img { width: 100%; height: 100%; display: block; }
+        .unlock-sub { font-size: var(--text-sm); letter-spacing: 0.04em; }
+        .card { border-radius: 26px; padding: 28px; }
+
+        /* ---- 頂部列：浮動工具列 ---- */
+        .header-actions {
+            position: sticky;
+            top: calc(10px + env(safe-area-inset-top, 0px));
+            z-index: 20;
+            padding: 8px;
+            margin: 0 0 18px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(18px) saturate(180%);
+            -webkit-backdrop-filter: blur(18px) saturate(180%);
+            border: 1px solid var(--glass-border);
+            border-radius: 22px;
+            box-shadow: var(--glass-shadow);
+        }
+        .header-left { gap: 4px; }
+        .brand-title { font-size: 18px; font-weight: 700; letter-spacing: -0.02em; gap: 9px; }
+        .brand-title img { border-radius: 8px; box-shadow: 0 2px 8px var(--primary-glow); }
+        .btn-icon {
+            border-radius: 13px;
+            background: color-mix(in srgb, var(--text-primary) 5%, transparent);
+        }
+        .btn-icon:hover { background: var(--primary-light); color: var(--primary); }
+        .btn-icon.accent {
+            background: linear-gradient(140deg, color-mix(in srgb, var(--primary) 82%, #fff), var(--primary) 55%, color-mix(in srgb, var(--primary) 72%, #7C3AED));
+            color: #FFFFFF;
+            box-shadow: 0 1px 0 rgba(255, 255, 255, 0.3) inset, 0 8px 18px -6px var(--primary-glow);
+        }
+        .btn-icon.accent:hover { color: #FFFFFF; transform: translateY(-1px); filter: brightness(1.06); }
+
+        /* ---- 搜尋 ---- */
+        .keys-count { background: var(--primary-light); color: var(--primary); font-weight: 600; letter-spacing: 0.02em; }
+        .search-box input {
+            height: 46px;
+            border-radius: 15px;
+            border-width: 1px;
+            background: var(--bg-tertiary);
+            box-shadow: 0 1px 2px rgba(17, 22, 43, 0.04);
+        }
+        .search-box input:focus { border-color: var(--primary); box-shadow: 0 0 0 4px var(--primary-glow); }
+
+        /* ---- 驗證碼卡片 ---- */
+        .token-grid { gap: 14px; }
+        .token-item {
+            padding: 16px 16px 14px 22px;
+            gap: 10px;
+            border-radius: 20px;
+            background: var(--glass-bg);
+            box-shadow: var(--glass-shadow);
+        }
+        /* 左側以發行者色相做識別條 */
+        .token-item::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 16px;
+            bottom: 16px;
+            width: 4px;
+            border-radius: 0 4px 4px 0;
+            background: linear-gradient(180deg, hsl(var(--avatar-hue, 220) 85% 62%), hsl(calc(var(--avatar-hue, 220) + 28) 80% 52%));
+            pointer-events: none;
+        }
+        .token-item:hover {
+            transform: translateY(-2px);
+            border-color: var(--border-hover);
+            box-shadow: 0 1px 2px rgba(17, 22, 43, 0.05), 0 20px 40px -14px rgba(48, 60, 130, 0.30), 0 0 0 1px var(--border-hover);
+        }
+        .token-main { gap: 14px; }
+        .token-avatar {
+            width: 46px;
+            height: 46px;
+            border-radius: 15px;
+            font-size: 19px;
+            font-weight: 700;
+            background: linear-gradient(145deg, hsl(var(--avatar-hue, 220) 85% 62% / 0.26), hsl(var(--avatar-hue, 220) 85% 55% / 0.10));
+            color: hsl(var(--avatar-hue, 220) 68% 36%);
+            box-shadow: inset 0 0 0 1px hsl(var(--avatar-hue, 220) 70% 50% / 0.20);
+        }
+        :root[data-theme="dark"] .token-avatar {
+            background: linear-gradient(145deg, hsl(var(--avatar-hue, 220) 85% 62% / 0.30), hsl(var(--avatar-hue, 220) 85% 55% / 0.10));
+            color: hsl(var(--avatar-hue, 220) 90% 78%);
+            box-shadow: inset 0 0 0 1px hsl(var(--avatar-hue, 220) 80% 70% / 0.22);
+        }
+        .token-name { font-size: 13px; font-weight: 600; color: var(--text-secondary); letter-spacing: 0.01em; }
+        .token-code {
+            font-size: 30px;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            word-spacing: 0.14em;
+            line-height: 1.1;
+            font-feature-settings: "tnum" 1, "zero" 1;
+            transition: color var(--transition-normal) var(--ease-out);
+        }
+        .token-code.masked { letter-spacing: 0.1em; }
+        .token-item:has(.progress-ring.critical) .token-code { color: var(--danger); }
+        .token-account { font-size: 12px; color: var(--text-tertiary); }
+        .token-actions { padding-top: 8px; border-top: 1px dashed var(--border-default); }
+        .progress-ring .bg { stroke: var(--ring-bg); }
+        .progress-ring circle { stroke-width: 3.4; }
+        .progress-text { font-weight: 600; }
+        .btn-mini { border-radius: 10px; }
+        .btn-mini:hover { background: var(--primary-light); color: var(--primary); }
+        .btn-mini.danger:hover { background: var(--danger-light); color: var(--danger); }
+        .badge { font-weight: 600; }
+
+        /* ---- 空狀態 ---- */
+        .empty-state {
+            margin: 12px 0;
+            padding: 44px 24px;
+            border: 1.5px dashed var(--border-hover);
+            border-radius: 24px;
+            background: var(--glass-bg);
+        }
+        .empty-state::before {
+            width: 72px;
+            height: 72px;
+            background: linear-gradient(140deg, var(--primary), color-mix(in srgb, var(--primary) 60%, #2DC4B6));
+            opacity: 0.75;
+        }
+        .empty-state p:first-of-type { font-size: 18px; font-weight: 650; color: var(--text-primary); }
+
+        /* ---- 按鈕 ---- */
+        .btn-primary {
+            height: 50px;
+            border-radius: 15px;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+            background: linear-gradient(180deg, color-mix(in srgb, var(--primary) 86%, #fff), var(--primary));
+            box-shadow: 0 1px 0 rgba(255, 255, 255, 0.28) inset, 0 10px 22px -8px var(--primary-glow);
+        }
+        .btn-primary:hover:not(:disabled) { transform: translateY(-1px); }
+        .btn-secondary {
+            border-radius: 999px;
+            padding: 0 22px;
+            font-weight: 600;
+            background: var(--bg-tertiary);
+            box-shadow: 0 1px 2px rgba(17, 22, 43, 0.05);
+        }
+        .btn-secondary:hover:not(:disabled) { border-color: var(--primary); color: var(--primary); }
+        .footer-actions { margin-top: 28px; }
+
+        /* ---- 表單與對話框 ---- */
+        input[type="text"], input[type="password"], input[type="number"], input[type="email"], select, textarea {
+            border-radius: 13px;
+        }
+        input:focus, select:focus, textarea:focus { box-shadow: 0 0 0 4px var(--primary-glow); }
+        .modal {
+            border-radius: 28px;
+            box-shadow: 0 40px 80px -20px rgba(10, 16, 50, 0.45), 0 0 0 1px var(--glass-border);
+        }
+        .modal h2 { font-weight: 700; letter-spacing: -0.02em; }
+        .input-tabs, .segmented { border-radius: 14px; }
+        .input-tabs button, .segmented button { border-radius: 11px; font-weight: 600; }
+        .input-tabs button.active { color: var(--primary); box-shadow: 0 1px 3px rgba(17, 22, 43, 0.12); }
+        .import-item, .format-option { border-radius: 14px; }
+        .format-option:has(input:checked) { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-glow); }
+
+        @media (max-width: 720px) {
+            body { padding: 14px; }
+            .token-code { font-size: 32px; }
+            .header-actions { top: calc(8px + env(safe-area-inset-top, 0px)); }
         }
     </style>
     <script src="/vendor/jsQR.js" defer></script>
