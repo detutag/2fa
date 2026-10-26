@@ -57,7 +57,7 @@
 | 目標 | Build 命令 | Deploy / 啟動命令 | 備註 |
 |------|-----------|------------------|------|
 | Cloudflare Workers（Wrangler） | 無需 build（純靜態 + Worker） | `wrangler deploy` | 本機測試：`wrangler dev` |
-| Cloudflare 面板（連接 Git） | 留空 | 面板自動 build 與部署 | 見方式三；push 後自動重新部署 |
+| Cloudflare 面板（連接 Git） | 留空（選填欄位） | Deploy command 預設 `npx wrangler deploy` | 見方式三；push 後自動重新部署 |
 | Docker | `docker build -t 2fa .` | `docker compose up -d` 或 `docker run …` | 亦可直接拉取現成映像 `l981244680/2fa` |
 | 本機 Node（Docker 版後端） | `npm install` | `npm start` | 開發熱重載：`npm run dev` |
 | 回歸測試 | — | `npm test` | Node ≥ 18 |
@@ -193,11 +193,12 @@ wrangler deploy
 
 1. 登入 [Cloudflare 面板](https://dash.cloudflare.com/) → **Workers & Pages** → **Create application**
 2. 選擇 **Import an existing Git repository**（連接 GitHub／GitLab），選取本儲存庫
-3. 填寫 build 設定：
+3. 填寫 build 設定（位於 Worker 的 **Settings → Build**）：
    - **Branch**：`main`
    - **Root directory**：留空（儲存庫根目錄，即 `wrangler.toml` 所在位置）
-   - **Build command**：**留空**（本專案為純靜態檔案 + Worker，無 build 步驟）
-   - 面板會自動讀取儲存庫中的 `wrangler.toml`：靜態資源目錄（`public/`）、KV binding 等；未填 `id` 的 KV 會在首次部署時自動建立並綁定
+   - **Build command**：**留空**。此欄為選填，僅需要編譯步驟的框架（Next.js、Astro 等）才需填寫；本專案為純靜態檔案 + 純 JS Worker，無任何編譯步驟。若面板預留了預設值（如 `npm run build`），請清空——或保留也無妨：package.json 的 `build` script 為 no-op echo，不會失敗
+   - **Deploy command**：保持預設 `npx wrangler deploy` 即可。真正完成部署的是這一步：wrangler 讀取 `wrangler.toml`，上傳 `public/` 靜態資源與 Worker 腳本；Wrangler 版本跟隨 package.json 的 `devDependencies`（已釘 `^4.59.1`）
+   - 面板會自動讀取儲存庫中的 `wrangler.toml`：靜態資源目錄（`public/`）、KV binding 等；未填 `id` 的 KV 會在首次部署時自動建立並綁定（Builds 自動產生的 API token 已含 KV 編輯權限）
 4. 點擊 **Deploy**，等待 build 完成後瀏覽分配的 `*.workers.dev` 域名
 5. 之後每次 push 到 `main`，面板會自動觸發新的 build 與部署（此為 Cloudflare 自家 CI，與 GitHub Actions 相互獨立）
 6. 可選設定：

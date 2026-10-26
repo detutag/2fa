@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "test": "node --test"
+    "test": "node --test",
+    "build": "echo \"2fa: no build step required (static assets + plain JS worker)\""
   },
   "keywords": [
     "2fa",
@@ -17,6 +18,9 @@
   "dependencies": {
     "better-sqlite3": "^11.0.0",
     "express": "^4.21.0"
+  },
+  "devDependencies": {
+    "wrangler": "^4.59.1"
   },
   "engines": {
     "node": ">=18.0.0"
