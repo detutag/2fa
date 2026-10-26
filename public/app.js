@@ -109,6 +109,15 @@ function cleanSecret(s) {
     return String(s || '').toUpperCase().replace(/[^A-Z2-7]/g, '');
 }
 
+/**
+ * 原始字串是否「只含」Base32 字元（允許空白、連字號、補位符 =，大小寫不拘）。
+ * cleanSecret 會默默丟掉非 Base32 字元，若來源是 steam://XXXX 之類，
+ * 會得到帶 STEAM 前綴的假金鑰；匯入時須先用本函式檢查原始值。
+ */
+function isCleanBase32Input(s) {
+    return /^[A-Za-z2-7\s=-]*$/.test(String(s || ''));
+}
+
 /** Base32 字串是否合法（至少 8 字元 ≈ 5 bytes） */
 function isValidSecret(s) {
     var c = cleanSecret(s);
@@ -314,6 +323,8 @@ function parseOtpauthUri(uri) {
         counter: type === 'hotp' ? Math.max(0, toInt(params.get('counter'), 0)) : 0
     };
     if (algo === 'MD5') entry._invalidReason = '不支援 MD5 演算法';
+    var encoder = String(params.get('encoder') || '').toLowerCase();
+    if (encoder === 'steam') entry._invalidReason = '不支援 Steam Guard';
     return entry;
 }
 
@@ -439,8 +450,11 @@ function newImportResult(format) {
 function pushImportEntry(res, raw) {
     var name = String(raw.name || raw.issuer || raw.account || '未命名').trim().slice(0, 64) || '未命名';
     var secret = raw.secret;
+    var badSecretChars = false;
     if (Array.isArray(secret) || secret instanceof Uint8Array) {
         secret = bytesToBase32(secret); // FreeOTP int[] 形式
+    } else if (typeof secret === 'string' && !isCleanBase32Input(secret)) {
+        badSecretChars = true;          // 例如 steam://XXXX 或含 0/1/8/9 的字串
     }
     secret = cleanSecret(secret);
     var type = String(raw.type || 'totp').toLowerCase() === 'hotp' ? 'hotp' : 'totp';
@@ -457,6 +471,9 @@ function pushImportEntry(res, raw) {
         counter: type === 'hotp' ? Math.max(0, toInt(raw.counter, 0)) : 0,
         invalidReason: raw._invalidReason || null
     };
+    if (badSecretChars) {
+        entry.invalidReason = entry.invalidReason || '金鑰含非 Base32 字元（可能是不支援的格式）';
+    }
     if (!entry.secret || entry.secret.length < 8) {
         entry.invalidReason = entry.invalidReason || '金鑰無效或過短';
     }
@@ -493,7 +510,18 @@ function pushFromGenericObject(res, item) {
             return;
         }
     }
-    var typeRaw = String(item.type || otp.type || otp.tokenType || item.tokenType || 'totp').toUpperCase();
+    var typeRaw = String(item.type || otp.type || otp.tokenType || item.tokenType || item.kind || otp.kind || 'totp').toUpperCase();
+    if (typeRaw.indexOf('STEAM') === 0) {
+        // andOTP 等：Steam Guard 使用不同的取碼演算法，不可當成 TOTP 匯入
+        pushImportEntry(res, {
+            name: item.name || item.title || item.issuer || otp.issuer || accountFromLabel(item.label || otp.label) || '',
+            account: item.account || otp.account || accountFromLabel(item.label || otp.label) || '',
+            issuer: item.issuer || otp.issuer || '',
+            secret: secret,
+            _invalidReason: '不支援 Steam Guard'
+        });
+        return;
+    }
     pushImportEntry(res, {
         name: item.name || item.title || item.issuer || otp.issuer || accountFromLabel(item.label || otp.label) || item.account || otp.account || '',
         account: item.account || otp.account || accountFromLabel(item.label || otp.label) || '',
@@ -569,9 +597,9 @@ function parseJsonImport(data, res) {
     }
 
     // ---- 2FAS ----
-    if (data.app === '2fas' || (Array.isArray(data.services) && (data.backupVersion !== undefined || (data.services.length > 0 && data.services[0] && (data.services[0].otp !== undefined || data.services[0].key !== undefined))))) {
+    if (data.app === '2fas' || data.servicesEncrypted !== undefined || (Array.isArray(data.services) && (data.backupVersion !== undefined || (data.services.length > 0 && data.services[0] && (data.services[0].otp !== undefined || data.services[0].key !== undefined))))) {
         res.format = '2fas';
-        if (data.encryption || (data.services || []).some(function (s) { return s && (s.encrypted || (s.data && !s.otp)); })) {
+        if (data.encryption || data.servicesEncrypted !== undefined || (data.services || []).some(function (s) { return s && (s.encrypted || (s.data && !s.otp)); })) {
             res.encrypted = true;
             return true;
         }
@@ -628,7 +656,10 @@ function parseJsonImport(data, res) {
                     if (bw.name) pb.name = String(bw.name).trim().slice(0, 64);
                     pushImportEntry(res, pb);
                 }
-            } else if (isValidSecret(totp)) {
+            } else if (totp.toLowerCase().indexOf('steam://') === 0) {
+                pushImportEntry(res, { name: bw.name || '', secret: null, _invalidReason: '不支援 Steam Guard' });
+            } else {
+                // 非 Base32 內容會由 pushImportEntry 標為無效（而非默默跳過或清洗）
                 pushImportEntry(res, { name: bw.name || '', secret: totp });
             }
         }
@@ -766,12 +797,12 @@ function dedupeImportEntries(res) {
 
 /** 比對現有金鑰，標記重複項目 */
 function markImportDuplicates(entries, existingKeys) {
-    var names = new Set(existingKeys.map(function (k) { return k.name; }));
+    // 僅以 secret + type 判斷重複：name 通常等於 issuer，同服務多帳號不應互相誤判
     var secrets = new Set(existingKeys.map(function (k) { return cleanSecret(k.secret) + '|' + (k.type === 'hotp' ? 'hotp' : 'totp'); }));
     return entries.map(function (e) {
         var dup = false;
         if (!e.invalidReason) {
-            if (names.has(e.name) || secrets.has(e.secret + '|' + e.type)) dup = true;
+            if (secrets.has(e.secret + '|' + e.type)) dup = true;
         }
         return Object.assign({}, e, { duplicate: dup });
     });
@@ -3176,6 +3207,7 @@ if (typeof module !== 'undefined' && module.exports) {
         normalizeKey: normalizeKey,
         cleanSecret: cleanSecret,
         isValidSecret: isValidSecret,
+        isCleanBase32Input: isCleanBase32Input,
         normalizeAlgo: normalizeAlgo,
         parseOtpauthUri: parseOtpauthUri,
         buildOtpauthUri: buildOtpauthUri,
