@@ -47,6 +47,16 @@ Browser <--HTTP/HTTPS--> Express Server <--SQLite--> Local Database
 | Login Protection | Exponential backoff lockout after 5 failed attempts (30 s up to 5 min) |
 | Headers | CSP, X-Frame-Options: DENY, X-Content-Type-Options: nosniff, Referrer-Policy, Permissions-Policy |
 
+## Command Quick Reference
+
+| Target | Build command | Deploy / start command | Notes |
+|--------|--------------|------------------------|-------|
+| Cloudflare Workers (Wrangler) | None (pure static + Worker) | `wrangler deploy` | Local testing: `wrangler dev` |
+| Cloudflare dashboard (Git-connected) | Leave empty | Dashboard builds & deploys automatically | See Method 3; redeploys on push |
+| Docker | `docker build -t 2fa .` | `docker compose up -d` or `docker run …` | Or pull the prebuilt image `l981244680/2fa` |
+| Local Node (Docker-version backend) | `npm install` | `npm start` | Dev hot-reload: `npm run dev` |
+| Regression tests | — | `npm test` | Node ≥ 18 |
+
 ## Deployment Guide
 
 ### Method 1: Docker Deployment (Recommended)
@@ -85,6 +95,20 @@ Then run:
 
 ```bash
 docker compose up -d
+```
+
+#### Build from Source
+
+```bash
+# build command
+docker build -t 2fa .
+
+# deploy / start command
+docker run -d \
+  --name 2fa-auth \
+  -p 3000:3000 \
+  -v 2fa-data:/app/data \
+  2fa
 ```
 
 #### Environment Variables
@@ -164,6 +188,26 @@ wrangler deploy
 ```
 
 After deployment, visit the output URL to start using.
+
+### Method 3: Cloudflare Dashboard Deployment (Git-connected, no local Wrangler)
+
+For deployments entirely from the Cloudflare dashboard, without installing Wrangler or running your own CI:
+
+1. In the [Cloudflare dashboard](https://dash.cloudflare.com/), go to **Workers & Pages** → **Create application**
+2. Choose **Import an existing Git repository** (connect GitHub/GitLab) and select this repository
+3. Fill in the build settings:
+   - **Branch**: `main`
+   - **Root directory**: leave empty (repository root, where `wrangler.toml` lives)
+   - **Build command**: **leave empty** (the project is pure static files + Worker, no build step)
+   - The dashboard reads `wrangler.toml` from the repository automatically: assets directory (`public/`), KV bindings, etc.; KV namespaces declared without an `id` are created and bound on first deploy
+4. Click **Deploy**, wait for the build to finish, then visit the assigned `*.workers.dev` subdomain
+5. Every subsequent push to `main` triggers a new dashboard build and deployment (Cloudflare's own CI, independent of GitHub Actions)
+6. Optional:
+   - **Custom domain**: Worker page → Settings → Domains & Routes
+   - **Manual KV**: Workers & Pages → KV → create a namespace → paste its ID into `[[kv_namespaces]] id` in `wrangler.toml` (auto-created if left empty)
+   - **Rate limiting**: the `API_RATE_LIMITER` binding in `wrangler.toml` is enabled by default; comment that block out if your environment does not support it
+
+> Note: if the repository's GitHub Actions workflow (`deploy-worker.yml`) is also active, both pipelines deploy the same Worker name (`2fa-sync`) and overwrite each other — keep only one.
 
 ## GitHub Actions Auto Deploy (Optional)
 

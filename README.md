@@ -52,6 +52,16 @@
 | 登入防護 | 連續失敗 5 次後指數退避鎖定（30 秒起，上限 5 分鐘） |
 | 標頭 | CSP、X-Frame-Options: DENY、X-Content-Type-Options: nosniff、Referrer-Policy、Permissions-Policy |
 
+## 命令速覽
+
+| 目標 | Build 命令 | Deploy / 啟動命令 | 備註 |
+|------|-----------|------------------|------|
+| Cloudflare Workers（Wrangler） | 無需 build（純靜態 + Worker） | `wrangler deploy` | 本機測試：`wrangler dev` |
+| Cloudflare 面板（連接 Git） | 留空 | 面板自動 build 與部署 | 見方式三；push 後自動重新部署 |
+| Docker | `docker build -t 2fa .` | `docker compose up -d` 或 `docker run …` | 亦可直接拉取現成映像 `l981244680/2fa` |
+| 本機 Node（Docker 版後端） | `npm install` | `npm start` | 開發熱重載：`npm run dev` |
+| 回歸測試 | — | `npm test` | Node ≥ 18 |
+
 ## 部署教學
 
 ### 方式一：Docker 部署（推薦）
@@ -90,6 +100,20 @@ services:
 
 ```bash
 docker compose up -d
+```
+
+#### 從原始碼建置
+
+```bash
+# build 命令
+docker build -t 2fa .
+
+# deploy / 啟動命令
+docker run -d \
+  --name 2fa-auth \
+  -p 3000:3000 \
+  -v 2fa-data:/app/data \
+  2fa
 ```
 
 #### 環境變數
@@ -162,6 +186,26 @@ wrangler deploy
 ```
 
 部署完成後，瀏覽輸出的 URL 即可使用。
+
+### 方式三：Cloudflare 面板部署（連接 Git，免本機 Wrangler）
+
+適合不想在本機安裝 Wrangler 或自架 CI 的情境，全程在 Cloudflare 面板完成：
+
+1. 登入 [Cloudflare 面板](https://dash.cloudflare.com/) → **Workers & Pages** → **Create application**
+2. 選擇 **Import an existing Git repository**（連接 GitHub／GitLab），選取本儲存庫
+3. 填寫 build 設定：
+   - **Branch**：`main`
+   - **Root directory**：留空（儲存庫根目錄，即 `wrangler.toml` 所在位置）
+   - **Build command**：**留空**（本專案為純靜態檔案 + Worker，無 build 步驟）
+   - 面板會自動讀取儲存庫中的 `wrangler.toml`：靜態資源目錄（`public/`）、KV binding 等；未填 `id` 的 KV 會在首次部署時自動建立並綁定
+4. 點擊 **Deploy**，等待 build 完成後瀏覽分配的 `*.workers.dev` 域名
+5. 之後每次 push 到 `main`，面板會自動觸發新的 build 與部署（此為 Cloudflare 自家 CI，與 GitHub Actions 相互獨立）
+6. 可選設定：
+   - **自訂域名**：Worker 頁面 → Settings → Domains & Routes
+   - **手動指定 KV**：Workers & Pages → KV → 建立 namespace → 將 ID 填入 `wrangler.toml` 的 `[[kv_namespaces]] id`（不填則自動建立）
+   - **速率限制**：`wrangler.toml` 的 `API_RATE_LIMITER` binding 預設啟用；若部署環境不支援，註解掉該段即可
+
+> 注意：若同時啟用本儲存庫的 GitHub Actions（`deploy-worker.yml`），兩條部署路徑會部署同一個 Worker（名稱 `2fa-sync`）、互相覆蓋，建議只保留一條。
 
 ### GitHub Actions 自動部署（可選）
 
