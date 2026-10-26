@@ -158,3 +158,70 @@ test('自家 JSON 匯出格式可無損往返', () => {
   assert.deepEqual([bank.type, bank.counter, bank.digits, bank.algorithm], ['hotp', 7, 8, 'SHA256']);
   assert.equal(valid(r).find((e) => e.name === 'Slow').period, 60);
 });
+
+/* ---------- 通用深度掃描（其餘 JSON 結構） ---------- */
+test('Authenticator Pro（Stratum）：PascalCase 欄位與數字類型/演算法', () => {
+  const r = parse({
+    Authenticators: [
+      { Type: 2, Issuer: 'GitHub', Username: 'alice', Algorithm: 1, Digits: 8, Period: 60, Counter: 0, Secret: S1 },
+      { Type: 1, Issuer: 'Bank', Username: 'bob', Algorithm: 0, Digits: 6, Period: 30, Counter: 9, Secret: S2 },
+      { Type: 4, Issuer: 'Steam', Username: 's', Algorithm: 0, Digits: 5, Period: 30, Counter: 0, Secret: S3 },
+    ],
+    Categories: [],
+  });
+  assert.equal(r.format, 'generic');
+  assert.equal(valid(r).length, 2);
+  const gh = valid(r).find((e) => e.name === 'GitHub');
+  assert.deepEqual([gh.account, gh.algorithm, gh.digits, gh.period, gh.type], ['alice', 'SHA256', 8, 60, 'totp']);
+  const bank = valid(r).find((e) => e.name === 'Bank');
+  assert.deepEqual([bank.type, bank.counter], ['hotp', 9]);
+  assert.equal(invalid(r).length, 1);
+});
+
+test('LastPass Authenticator 風格：issuerName / userName / timeStep', () => {
+  const r = parse({ accounts: [{ issuerName: 'Dropbox', originalIssuerName: 'Dropbox', userName: 'me@x.com', secret: S1, timeStep: 30, digits: 6, algorithm: 'SHA1' }] });
+  assert.equal(valid(r).length, 1);
+  assert.equal(valid(r)[0].issuer, 'Dropbox');
+  assert.equal(valid(r)[0].account, 'me@x.com');
+});
+
+test('任意巢狀包裝 + entries 內只有 secret（無 uri/source）', () => {
+  const r = parse({ meta: { v: 1 }, data: { entries: [{ title: 'Svc', login: 'u', secret_key: S1 }, { title: 'Svc2', secret_key: S2, digits: 8 }] } });
+  assert.equal(valid(r).length, 2);
+  assert.equal(valid(r).find((e) => e.name === 'Svc2').digits, 8);
+});
+
+test('頂層陣列且欄位為大寫（原本會變成 no-keys）', () => {
+  const r = parse([{ Issuer: 'A', Username: 'u', Secret: S1 }, { Issuer: 'B', Username: 'v', Secret: S2 }]);
+  assert.equal(valid(r).length, 2);
+});
+
+test('services 內無 otp 物件、secret 在項目本身', () => {
+  const r = parse({ services: [{ name: 'X', secret: S1, issuer: 'X', account: 'a' }] });
+  assert.equal(valid(r).length, 1);
+});
+
+test('JSON 轉義斜線 otpauth:\\/\\/ 也能解出', () => {
+  const raw = '{"x":[{"u":"otpauth:\\/\\/totp\\/GH:u?secret=' + S1 + '&issuer=GH"}]}';
+  const r = parse(raw);
+  assert.equal(valid(r).length, 1);
+  assert.equal(valid(r)[0].issuer, 'GH');
+});
+
+test('內層 otp 物件欄位被併入（2FAS 風格但缺少頂層標記）', () => {
+  const r = parse({ list: [{ name: 'N', secret: S1, otp: { issuer: 'Iss', account: 'acc', digits: 8, algorithm: 'SHA512', period: 45 } }] });
+  const e = valid(r)[0];
+  assert.deepEqual([e.issuer, e.account, e.digits, e.algorithm, e.period], ['Iss', 'acc', 8, 'SHA512', 45]);
+});
+
+test('不含 OTP 的 JSON 仍為 unsupported，並附上欄位提示；弱欄位不誤判', () => {
+  const r = parse({ config: { key: 'hello', token: 'abc' }, theme: 'dark', version: 3 });
+  assert.equal(r.error, 'unsupported');
+  assert.match(r.hint, /config/);
+  assert.equal(parse([{ foo: 1 }]).error, 'unsupported');
+});
+
+test('弱欄位 key 內容像 Base32 時才採用', () => {
+  const r = parse({ items2: [{ name: 'W', key: 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP' }] });
+  assert.equal(valid(r).length, 1);
+});

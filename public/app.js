@@ -708,6 +708,154 @@ function parseJsonImport(data, res) {
     return false;
 }
 
+/* ------------------------------------------------------------------
+ * 通用深度掃描：所有已知格式都不符合時的最後 JSON 兜底。
+ * - 遞迴掃描任意巢狀 JSON，不區分欄位大小寫與底線（Secret / secret_key 皆可）
+ * - 內含 otpauth:// 字串值（含 JSON 轉義後的 \/）也會被解出
+ * - 支援 Authenticator Pro（Stratum）、LastPass Authenticator 等以欄位別名表示的格式
+ * ------------------------------------------------------------------ */
+var DEEP_SECRET_STRONG = ['secret', 'secretkey', 'sharedsecret', 'totpsecret', 'otpsecret', 'base32secret', 'totp', 'seed'];
+var DEEP_SECRET_WEAK = ['key', 'token'];   // 太常見，需內容像 Base32 才採用
+var DEEP_ISSUER = ['issuer', 'issuername', 'originalissuername', 'service', 'servicename', 'provider'];
+var DEEP_ACCOUNT = ['account', 'accountname', 'username', 'originalusername', 'user', 'email', 'userid'];
+var DEEP_NAME = ['name', 'title', 'displayname', 'label'];
+var DEEP_DIGITS = ['digits', 'digit', 'digitcount', 'codelength'];
+var DEEP_PERIOD = ['period', 'timestep', 'interval', 'step', 'timer'];
+var DEEP_ALGO = ['algorithm', 'algo', 'hashalgorithm'];
+var DEEP_COUNTER = ['counter', 'hotpcounter', 'movingfactor'];
+var DEEP_TYPE = ['type', 'kind', 'tokentype', 'otptype'];
+
+function deepNormKey(k) { return String(k).toLowerCase().replace(/[^a-z0-9]/g, ''); }
+
+function deepPick(maps, names) {
+    for (var m = 0; m < maps.length; m++) {
+        if (!maps[m]) continue;
+        for (var i = 0; i < names.length; i++) {
+            var v = maps[m][names[i]];
+            if (v !== undefined && v !== null && v !== '' && typeof v !== 'object') return v;
+        }
+    }
+    return undefined;
+}
+
+function deepBuildMap(node) {
+    var map = {};
+    var keys = Object.keys(node);
+    var i, k;
+    for (i = 0; i < keys.length; i++) {
+        k = deepNormKey(keys[i]);
+        if (!(k in map)) map[k] = node[keys[i]];
+    }
+    // 內層物件（如 2FAS 的 otp）的欄位以較低優先權併入
+    for (i = 0; i < keys.length; i++) {
+        var v = node[keys[i]];
+        if (v && typeof v === 'object' && !Array.isArray(v)) {
+            var inner = Object.keys(v);
+            for (var j = 0; j < inner.length; j++) {
+                var ik = deepNormKey(inner[j]);
+                if (!(ik in map) && typeof v[inner[j]] !== 'object') map[ik] = v[inner[j]];
+            }
+        }
+    }
+    return map;
+}
+
+function deepCollectOtp(node, parent, res, state, depth) {
+    if (state.count++ > 50000 || depth > 12) return;
+    var i;
+    if (typeof node === 'string') {
+        if (node.indexOf('otpauth://') === 0) {
+            var pu = parseOtpauthUri(node.trim());
+            if (pu) pushImportEntry(res, pu);
+        } else if (node.indexOf('otpauth-migration://') === 0) {
+            var mig = decodeMigrationPayload(node.trim());
+            for (i = 0; i < mig.length; i++) pushImportEntry(res, mig[i]);
+        }
+        return;
+    }
+    if (Array.isArray(node)) {
+        for (i = 0; i < node.length; i++) deepCollectOtp(node[i], parent, res, state, depth + 1);
+        return;
+    }
+    if (!node || typeof node !== 'object') return;
+
+    var map = deepBuildMap(node);
+    var secret;
+    for (i = 0; i < DEEP_SECRET_STRONG.length; i++) {
+        var sv = map[DEEP_SECRET_STRONG[i]];
+        if ((typeof sv === 'string' && sv.trim()) || (Array.isArray(sv) && sv.length)) { secret = sv; break; }
+    }
+    if (secret === undefined) {
+        for (i = 0; i < DEEP_SECRET_WEAK.length; i++) {
+            var wv = map[DEEP_SECRET_WEAK[i]];
+            if (typeof wv === 'string' && isCleanBase32Input(wv) && cleanSecret(wv).length >= 16) { secret = wv; break; }
+        }
+    }
+
+    if (secret === undefined) {
+        var ks = Object.keys(node);
+        for (i = 0; i < ks.length; i++) deepCollectOtp(node[ks[i]], map, res, state, depth + 1);
+        return;
+    }
+
+    if (typeof secret === 'string' && secret.indexOf('otpauth://') === 0) {
+        var pus = parseOtpauthUri(secret.trim());
+        if (pus) { pushImportEntry(res, pus); return; }
+    }
+
+    var maps = [map, parent];
+    var issuer = deepPick(maps, DEEP_ISSUER);
+    var account = deepPick([map], DEEP_ACCOUNT);
+    var nameRaw = deepPick([map], DEEP_NAME);
+    if (account === undefined && typeof nameRaw === 'string' && nameRaw.indexOf(':') > 0) {
+        account = accountFromLabel(nameRaw);
+        if (issuer === undefined) issuer = nameRaw.split(':')[0].trim();
+    } else if (account === undefined && issuer !== undefined && nameRaw !== undefined && String(nameRaw) !== String(issuer)) {
+        account = nameRaw;
+    }
+    if (account === undefined) account = deepPick([parent], DEEP_ACCOUNT);
+
+    // 類型：字串類型可繼承父層；數字類型（Stratum：1=HOTP, 2=TOTP, 其他不支援）僅採用本層
+    var typeVal = deepPick([map], DEEP_TYPE);
+    if (typeVal === undefined) {
+        var pt = deepPick([parent], DEEP_TYPE);
+        if (typeof pt === 'string') typeVal = pt;
+    }
+    var type = 'totp';
+    var invalid = null;
+    if (typeof typeVal === 'number') {
+        if (typeVal === 1) type = 'hotp';
+        else if (typeVal !== 2) invalid = '不支援的類型（' + typeVal + '）';
+    } else if (typeVal !== undefined) {
+        var tv = String(typeVal).toUpperCase();
+        if (tv.indexOf('STEAM') === 0) invalid = '不支援 Steam Guard';
+        else if (tv.indexOf('YANDEX') === 0 || tv.indexOf('MOTP') === 0) invalid = '不支援的類型（' + String(typeVal).toLowerCase() + '）';
+        else if (tv.indexOf('HOTP') === 0) type = 'hotp';
+    }
+
+    var algo = deepPick(maps, DEEP_ALGO);
+    if (typeof algo === 'number') algo = algo === 0 ? 'SHA1' : algo === 1 ? 'SHA256' : algo === 2 ? 'SHA512' : String(algo);
+
+    pushImportEntry(res, {
+        name: issuer || nameRaw || account || '',
+        account: account !== undefined ? account : '',
+        issuer: issuer !== undefined ? issuer : '',
+        secret: secret,
+        type: type,
+        digits: deepPick(maps, DEEP_DIGITS),
+        period: deepPick(maps, DEEP_PERIOD),
+        algorithm: algo,
+        counter: deepPick([map], DEEP_COUNTER),
+        _invalidReason: invalid
+    });
+}
+
+function parseDeepGeneric(data, res) {
+    deepCollectOtp(data, null, res, { count: 0 }, 0);
+    if (res.entries.length > 0) { res.format = 'generic'; return true; }
+    return false;
+}
+
 /** 純文字 URI 清單解析（每行一個 otpauth:// 或 otpauth-migration://） */
 function parseUriListText(text, res) {
     var lines = String(text).split(/\r?\n/);
@@ -751,6 +899,7 @@ function sweepOtpauthUris(text, res) {
  */
 function parseImportContent(text) {
     var res = newImportResult();
+    var unsupportedHint = '';
     var trimmed = String(text || '').trim();
     if (!trimmed) { res.error = 'empty'; return res; }
 
@@ -761,10 +910,19 @@ function parseImportContent(text) {
             var handled = parseJsonImport(data, res);
             if (res.encrypted) { res.error = 'encrypted'; return res; }
             if (handled && res.entries.length > 0) { dedupeImportEntries(res); return res; }
-            if (handled && res.entries.length === 0) {
-                // 格式認識但無有效項目（如 Bitwarden 無 totp 項目）
+            // 已知格式都沒有解出項目 → 通用深度掃描（任意巢狀 JSON、欄位別名）
+            var deepRes = newImportResult();
+            if (parseDeepGeneric(data, deepRes)) { dedupeImportEntries(deepRes); return deepRes; }
+            if (handled && res.entries.length === 0 && !(res.format === 'list' && data.length > 0)) {
+                // 格式認識但無有效項目（如 Bitwarden 無 totp 項目）；非空的未知陣列則視為無法辨識
                 res.error = 'no-keys';
                 return res;
+            }
+            if (data && typeof data === 'object') {
+                var topKeys = Array.isArray(data)
+                    ? (data[0] && typeof data[0] === 'object' ? Object.keys(data[0]) : [])
+                    : Object.keys(data);
+                unsupportedHint = topKeys.slice(0, 12).join(', ');
             }
         } catch (e) {
             // JSON 解析失敗 → 往下走 URI 解析
@@ -780,6 +938,7 @@ function parseImportContent(text) {
     if (sweepOtpauthUris(trimmed, res)) { dedupeImportEntries(res); return res; }
 
     res.error = 'unsupported';
+    res.hint = unsupportedHint;
     return res;
 }
 
@@ -2465,7 +2624,8 @@ function importKeys() {
             return;
         }
         if (result.error === 'unsupported' || result.error === 'parse') {
-            showImportError('無法辨識的備份格式。支援：Aegis、2FAS、Ente、Bitwarden、FreeOTP、Raivo、OTP Auth、Google Authenticator 遷移資料、otpauth:// URI 清單及本應用 JSON 備份。');
+            showImportError('無法辨識的備份格式。支援：Aegis、2FAS、Ente、Bitwarden、FreeOTP、Raivo、OTP Auth、Google Authenticator 遷移資料、otpauth:// URI 清單、本應用 JSON 備份，以及任何含 secret 欄位的通用 JSON。' +
+                (result.hint ? '（偵測到的欄位：' + result.hint + '）' : ''));
             return;
         }
         if (result.error === 'no-keys' || result.entries.length === 0) {
