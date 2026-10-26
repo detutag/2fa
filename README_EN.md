@@ -206,7 +206,9 @@ For deployments entirely from the Cloudflare dashboard, without installing Wrang
 6. Optional:
    - **Custom domain**: Worker page → Settings → Domains & Routes
    - **Manual KV**: Workers & Pages → KV → create a namespace → paste its ID into `[[kv_namespaces]] id` in `wrangler.toml` (auto-created if left empty)
-   - **Rate limiting**: the `API_RATE_LIMITER` binding in `wrangler.toml` is enabled by default; comment that block out if your environment does not support it
+   - **Rate limiting**: the `[[ratelimits]]` binding in `wrangler.toml` (`API_RATE_LIMITER`, `namespace_id = "1001"`, 100 requests per IP per 60 s) is enabled by default; comment that block out if your environment does not support the Rate Limiting API (all other protections remain)
+   - **Worker name**: dashboard Builds deploys to the Worker created under the project name (repo name `2fa`); `wrangler.toml` sets `name = "2fa"` so local CLI, GitHub Actions and the dashboard all deploy the same Worker
+   - **Reusing old KV data**: if a previously deployed Worker holds your encrypted vault and you want to keep it, copy its KV namespace ID (dashboard: Workers & Pages → old Worker → Settings → Bindings, or the KV page) into `[[kv_namespaces]] id` in `wrangler.toml`; leaving it empty auto-creates a brand-new KV (old data will not carry over)
 
 > Note: if the repository's GitHub Actions workflow (`deploy-worker.yml`) is also active, both pipelines deploy the same Worker name (`2fa-sync`) and overwrite each other — keep only one.
 

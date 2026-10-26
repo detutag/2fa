@@ -1,4 +1,7 @@
-name = "2fa-sync"
+# Worker 名稱與 Cloudflare 面板專案名（repo 名）保持一致：
+# 面板 Builds 會部署到以專案名建立的 Worker，本機 CLI / GitHub Actions 也應指向同一個，
+# 避免產生 2fa-sync / 2fa 兩個分裂的 Worker。
+name = "2fa"
 main = "worker.js"
 compatibility_date = "2024-01-01"
 
@@ -10,17 +13,23 @@ assets = { directory = "./public", binding = "ASSETS", run_worker_first = true, 
 
 # NOTE:
 # - Wrangler 支援自動建立資源。
-# - 若省略/註解 id，首次 wrangler deploy 時會自動建立並連結 KV。
+# - 若省略/註解 id，首次 wrangler deploy 時會自動建立並連結 KV（全新空 KV）。
+# - 若要「沿用舊部署的 KV 資料」：到面板 Workers & Pages → 舊 Worker → Settings → Bindings
+#   （或 Workers & Pages → KV）複製 namespace ID，填到下面的 id；否則留空自動建立。
 # - 手動設定時，將 __DATA_KV_ID__ 替換為自己的 KV namespace id。
 [[kv_namespaces]]
 binding = "DATA_KV"
 # id = "__DATA_KV_ID__"
 # preview_id = "__DATA_KV_PREVIEW_ID__"
 
-# 可選：API 速率限制（每個 IP 每 60 秒最多 100 次請求，防暴力/濫用）。
-# worker.js 已自動偵測：有此 binding 即啟用，沒有也正常運作。
-# 若你的部署環境不支援 ratelimit binding，註解掉本段即可。
-[[unsafe.bindings]]
+# API 速率限制：每個 IP 每 60 秒最多 100 次 /api/ 請求（防暴力與 KV 濫用）。
+# 官方語法為頂層 [[ratelimits]]，且 namespace_id 必填（帳戶內自訂的唯一整數字串，
+# 勿與其他 ratelimit binding 共用）。worker.js 會自動偵測：binding 存在即啟用。
+# 若你的部署環境不支援 Rate Limiting API，註解掉本段即可（其餘防護仍在）。
+[[ratelimits]]
 name = "API_RATE_LIMITER"
-type = "ratelimit"
-simple = { limit = 100, period = 60 }
+namespace_id = "1001"
+
+  [ratelimits.simple]
+  limit = 100
+  period = 60

@@ -204,7 +204,9 @@ wrangler deploy
 6. 可選設定：
    - **自訂域名**：Worker 頁面 → Settings → Domains & Routes
    - **手動指定 KV**：Workers & Pages → KV → 建立 namespace → 將 ID 填入 `wrangler.toml` 的 `[[kv_namespaces]] id`（不填則自動建立）
-   - **速率限制**：`wrangler.toml` 的 `API_RATE_LIMITER` binding 預設啟用；若部署環境不支援，註解掉該段即可
+   - **速率限制**：`wrangler.toml` 的 `[[ratelimits]]`（`API_RATE_LIMITER`，`namespace_id = "1001"`、每 IP 每 60 秒 100 次）預設啟用；若部署環境不支援 Rate Limiting API，註解掉該段即可（其餘防護仍在）
+   - **Worker 名稱**：面板 Builds 會部署到以專案名（repo 名 `2fa`）建立的 Worker；`wrangler.toml` 的 `name` 已設為 `2fa`，使本機 CLI、GitHub Actions 與面板都部署同一個 Worker
+   - **沿用舊 KV 資料**：若你之前已有部署過的 Worker 且想保留其中的加密資料，到面板 Workers & Pages → 舊 Worker → Settings → Bindings（或 KV 頁面）複製 namespace ID，填入 `wrangler.toml` 的 `[[kv_namespaces]] id`；留空則會自動建立全新 KV（舊資料不會跟過來）
 
 > 注意：若同時啟用本儲存庫的 GitHub Actions（`deploy-worker.yml`），兩條部署路徑會部署同一個 Worker（名稱 `2fa-sync`）、互相覆蓋，建議只保留一條。
 
